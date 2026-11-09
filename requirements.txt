@@ -5,4 +5,4 @@ matplotlib==3.11.1
 pytest==9.1.1
 streamlit
 groq
-pypdf
+pypdfrank-bm25

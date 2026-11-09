@@ -3,11 +3,7 @@ import hashlib
 import os
 from pathlib import Path
 
-import chromadb
 import streamlit as st
-from groq import Groq
-from pypdf import PdfReader
-from sentence_transformers import SentenceTransformer
 
 
 # -------------------- CONFIGURATION --------------------
@@ -69,14 +65,6 @@ st.markdown(
         margin-bottom: 0;
     }
 
-    .source-card {
-        padding: 12px;
-        margin: 8px 0;
-        border: 1px solid #2b3955;
-        border-radius: 10px;
-        background: #111a2e;
-    }
-
     div[data-testid="stChatMessage"] {
         border: 1px solid #26334d;
         border-radius: 12px;
@@ -89,7 +77,7 @@ st.markdown(
 st.markdown(
     """
     <div class="hero">
-        <h1>📚 Grounded RAG Assistant</h1>
+        <h1> Grounded RAG Assistant</h1>
         <p>
             Ask questions about your documents or the indexed Wikipedia
             collection. Answers are generated using retrieved context.
@@ -102,8 +90,11 @@ st.markdown(
 
 # -------------------- CACHED RESOURCES --------------------
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Loading embedding model...")
 def load_embedding_model():
+    # Import only when the model is actually needed.
+    from sentence_transformers import SentenceTransformer
+
     return SentenceTransformer(EMBED_MODEL)
 
 
@@ -112,20 +103,53 @@ def get_wiki_client():
     if not WIKI_DB.exists():
         return None
 
+    import chromadb
+
     return chromadb.PersistentClient(path=str(WIKI_DB))
 
 
 @st.cache_resource
 def get_upload_client():
+    import chromadb
+
     UPLOAD_DB.mkdir(parents=True, exist_ok=True)
+
     return chromadb.PersistentClient(path=str(UPLOAD_DB))
 
 
-def get_collection(client, collection_name):
+@st.cache_resource
+def get_wiki_collection():
+    client = get_wiki_client()
+
+    if client is None:
+        return None
+
     try:
-        return client.get_collection(name=collection_name)
+        return client.get_collection(name=WIKI_NAME)
     except Exception:
         return None
+
+
+@st.cache_resource
+def get_upload_collection():
+    client = get_upload_client()
+
+    try:
+        return client.get_collection(name=UPLOAD_NAME)
+    except Exception:
+        return None
+
+
+def get_api_key():
+    key = os.getenv("GROQ_API_KEY")
+
+    if not key:
+        try:
+            key = st.secrets.get("GROQ_API_KEY")
+        except Exception:
+            key = None
+
+    return key
 
 
 # -------------------- DOCUMENT PROCESSING --------------------
@@ -140,6 +164,8 @@ def extract_text(uploaded_file):
         )
 
     if filename.endswith(".pdf"):
+        from pypdf import PdfReader
+
         reader = PdfReader(uploaded_file)
         pages = []
 
@@ -151,14 +177,20 @@ def extract_text(uploaded_file):
     raise ValueError("Only PDF and TXT files are supported.")
 
 
-def chunk_text(text, chunk_words=CHUNK_WORDS, overlap=CHUNK_OVERLAP):
+def chunk_text(
+    text,
+    chunk_words=CHUNK_WORDS,
+    overlap=CHUNK_OVERLAP,
+):
     words = text.split()
 
     if not words:
         return []
 
     if overlap >= chunk_words:
-        raise ValueError("Chunk overlap must be smaller than chunk size.")
+        raise ValueError(
+            "Chunk overlap must be smaller than chunk size."
+        )
 
     chunks = []
     step = chunk_words - overlap
@@ -180,8 +212,7 @@ def index_uploaded_file(uploaded_file):
 
     if not text.strip():
         raise ValueError(
-            "No extractable text found. If this is a scanned PDF, "
-            "OCR may be required."
+            "No extractable text found. Scanned PDFs may require OCR."
         )
 
     chunks = chunk_text(text)
@@ -190,6 +221,7 @@ def index_uploaded_file(uploaded_file):
         raise ValueError("No usable text chunks were created.")
 
     model = load_embedding_model()
+
     embeddings = model.encode(
         chunks,
         normalize_embeddings=True,
@@ -197,6 +229,7 @@ def index_uploaded_file(uploaded_file):
     ).tolist()
 
     client = get_upload_client()
+
     collection = client.get_or_create_collection(
         name=UPLOAD_NAME,
         metadata={"hnsw:space": "cosine"},
@@ -206,7 +239,6 @@ def index_uploaded_file(uploaded_file):
         uploaded_file.getvalue()
     ).hexdigest()[:16]
 
-    # Stable IDs allow the same file to be indexed again safely.
     ids = [
         f"{file_hash}_{index}"
         for index in range(len(chunks))
@@ -221,10 +253,8 @@ def index_uploaded_file(uploaded_file):
         for index in range(len(chunks))
     ]
 
-    # Remove an earlier version of this exact file before re-indexing.
-    collection.delete(
-        where={"file_hash": file_hash}
-    )
+    # Replace an earlier indexing of the same file.
+    collection.delete(where={"file_hash": file_hash})
 
     collection.add(
         ids=ids,
@@ -233,92 +263,48 @@ def index_uploaded_file(uploaded_file):
         metadatas=metadatas,
     )
 
+    # Clear cached collection so the next query sees updated data.
+    get_upload_collection.clear()
+
     return len(chunks)
 
 
 # -------------------- RETRIEVAL --------------------
 
-def retrieve_documents(question, collection, top_k=TOP_K):
-    if collection is None or collection.count() == 0:
-        return []
+def retrieve_documents(question, collection, top_k=TOP_K, method="advanced"):
+    from src.advanced_retrieval import advanced_retrieve
 
-    model = load_embedding_model()
-
-    question_embedding = model.encode(
-        question,
-        normalize_embeddings=True,
-    ).tolist()
-
-    result = collection.query(
-        query_embeddings=[question_embedding],
-        n_results=min(top_k, collection.count()),
-        include=["documents", "metadatas", "distances"],
+    return advanced_retrieve(
+        question=question,
+        collection=collection,
+        top_k=top_k,
+        method=method,
     )
-
-    documents = result.get("documents", [[]])[0]
-    metadatas = result.get("metadatas", [[]])[0]
-    distances = result.get("distances", [[]])[0]
-
-    sources = []
-
-    for index, document in enumerate(documents):
-        metadata = (
-            metadatas[index]
-            if index < len(metadatas) and metadatas[index]
-            else {}
-        )
-
-        distance = (
-            distances[index]
-            if index < len(distances)
-            else None
-        )
-
-        sources.append(
-            {
-                "text": document,
-                "metadata": metadata,
-                "distance": distance,
-            }
-        )
-
-    return sources
-
-
-def retrieve_from_wikipedia(question):
-    client = get_wiki_client()
-
-    if client is None:
-        return []
-
-    collection = get_collection(client, WIKI_NAME)
-
-    return retrieve_documents(question, collection)
-
-
-def retrieve_from_uploads(question):
-    client = get_upload_client()
-    collection = get_collection(client, UPLOAD_NAME)
-
-    return retrieve_documents(question, collection)
 
 
 # -------------------- GROQ ANSWER GENERATION --------------------
 
+@st.cache_resource
+def get_groq_client(api_key):
+    from groq import Groq
+
+    return Groq(api_key=api_key)
+
+
 def generate_answer(question, sources):
-    api_key = os.getenv("GROQ_API_KEY")
+    if not sources:
+        return (
+            "I couldn't find relevant information in the selected "
+            "knowledge base. Try another question or upload a document "
+            "containing the answer."
+        )
+
+    api_key = get_api_key()
 
     if not api_key:
         raise RuntimeError(
             "GROQ_API_KEY is not set. Set it in your terminal "
             "before starting Streamlit."
-        )
-
-    if not sources:
-        return (
-            "I couldn't find relevant information in the selected "
-            "knowledge base. Try a different question or upload "
-            "a document containing the answer."
         )
 
     context_parts = []
@@ -336,18 +322,17 @@ def generate_answer(question, sources):
     context = "\n\n".join(context_parts)
 
     prompt = f"""
-You are a helpful Retrieval-Augmented Generation (RAG) assistant.
+You are a helpful Retrieval-Augmented Generation assistant.
 
 Answer the user's question using ONLY the retrieved context below.
 
 Rules:
-1. Do not invent facts that are not supported by the context.
-2. If the context does not contain the answer, say so clearly.
-3. Explain the answer in simple, direct language.
+1. Do not invent unsupported facts.
+2. If the context does not contain the answer, say so.
+3. Explain in simple, direct language.
 4. Cite supporting passages using [Source 1], [Source 2], etc.
-5. Distinguish facts explicitly stated in the context from conclusions
-   that are reasonably inferred.
-6. Do not claim to have read anything outside the supplied context.
+5. Distinguish stated facts from reasonable inferences.
+6. Do not claim to have read anything outside the context.
 
 RETRIEVED CONTEXT:
 {context}
@@ -358,7 +343,7 @@ USER QUESTION:
 ANSWER:
 """
 
-    client = Groq(api_key=api_key)
+    client = get_groq_client(api_key)
     last_error = None
 
     for model_name in LLM_MODELS:
@@ -406,6 +391,17 @@ with st.sidebar:
         ],
     )
 
+    retrieval_method = st.selectbox(
+        "Retrieval strategy",
+        options=["advanced", "hybrid", "dense", "bm25"],
+        format_func=lambda value: {
+            "advanced": "Hybrid + Cross-Encoder (Recommended)",
+            "hybrid": "Hybrid + RRF",
+            "dense": "Dense semantic search",
+            "bm25": "BM25 keyword search",
+        }[value],
+    )
+
     top_k = st.slider(
         "Retrieved passages",
         min_value=1,
@@ -431,7 +427,6 @@ with st.sidebar:
             st.warning("Upload at least one PDF or TXT file first.")
         else:
             total_chunks = 0
-
             progress = st.progress(0)
 
             for index, file in enumerate(uploaded_files):
@@ -440,6 +435,7 @@ with st.sidebar:
                         count = index_uploaded_file(file)
 
                     total_chunks += count
+
                     st.success(
                         f"{file.name}: indexed {count} chunks."
                     )
@@ -485,6 +481,7 @@ for message in st.session_state.messages:
                     st.markdown(
                         f"**Source {index}: {filename}**"
                     )
+
                     st.write(source["text"])
 
                     if source.get("distance") is not None:
@@ -493,7 +490,10 @@ for message in st.session_state.messages:
                             f"{source['distance']:.4f}"
                         )
 
-question = st.chat_input("Ask a question about your knowledge base...")
+
+question = st.chat_input(
+    "Ask a question about your knowledge base..."
+)
 
 if question:
     st.session_state.messages.append(
@@ -510,34 +510,19 @@ if question:
         try:
             with st.spinner("Searching your knowledge base..."):
                 if knowledge_source == "Uploaded documents":
-                    sources = retrieve_documents(
-                        question,
-                        get_collection(
-                            get_upload_client(),
-                            UPLOAD_NAME,
-                        ),
-                        top_k=top_k,
-                    )
+                    collection = get_upload_collection()
                 else:
-                    sources = retrieve_documents(
-                        question,
-                        get_collection(
-                            get_wiki_client(),
-                            WIKI_NAME,
-                        ),
-                        top_k=top_k,
-                    )
+                    collection = get_wiki_collection()
 
-            if not sources:
-                answer = (
-                    "I couldn't find any indexed passages in this "
-                    "knowledge base. Upload and index documents, or "
-                    "check that your Wikipedia database exists and "
-                    "contains the 'wikipedia' collection."
+                sources = retrieve_documents(
+                    question,
+                    collection,
+                    top_k=top_k,
+                    method=retrieval_method,
                 )
-            else:
-                with st.spinner("Generating an answer with Groq..."):
-                    answer = generate_answer(question, sources)
+
+            with st.spinner("Generating an answer with Groq..."):
+                answer = generate_answer(question, sources)
 
             st.markdown(answer)
 
@@ -555,6 +540,7 @@ if question:
                         st.markdown(
                             f"**Source {index}: {filename}**"
                         )
+
                         st.write(source["text"])
 
                         if source.get("distance") is not None:

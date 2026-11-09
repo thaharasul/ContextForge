@@ -1,14 +1,13 @@
-db/
-data/*
-!data/eval_results.txt
-!data/eval_results_300w.txt
-!data/eval_summary.csv
-!data/eval_summary.png
-.venv/
+﻿.venv/
 __pycache__/
-.DS_Store
-*.pyc
-.idea/
+*.py[cod]
+.env
+.env.*
+!.env.example
+db/
+uploaded_db/
+*.sqlite3
 .pytest_cache/
-# local-only working notes
-CLAUDE.md
+
+uploaded_db/
+app.py.before_advanced_retrieval

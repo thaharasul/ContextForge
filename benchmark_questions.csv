@@ -1,0 +1,21 @@
+question,article_title,relevant_chunk_ids
+Find the Wikipedia passage explaining this topic: 0. Zero (0) is a special number,0,452-0;452-1;452-10;452-11;452-12;452-13;452-14;452-2;452-3;452-4;452-5;452-6;452-7;452-8;452-9
+"Find the Wikipedia passage explaining this topic: 1 (number). One (1) is the first natural number, followed by two",1 (number),298-0;298-1
+Find the Wikipedia passage explaining this topic: A. A or a is the first letter of the English alphabet,A,3-0;3-1;3-2
+Find the Wikipedia passage explaining this topic: Abbreviation. An abbreviation is a shorter way to write a word or phrase,Abbreviation,16-0;16-1
+Find the Wikipedia passage explaining this topic: Acceleration. Acceleration is a measure of how fast velocity changes,Acceleration,36-0;36-1;36-2;36-3;36-4
+Find the Wikipedia passage explaining this topic: Ad hominem. Ad hominem is a Latin word for a type of argument,Ad hominem,18-0;18-1;18-2
+"Find the Wikipedia passage explaining this topic: Addition. Not to be confused with building extension which are also called additions In mathematics, addition, represented by the symbol , is an operation which combines two mathematical objects together into another mathematical object of the same type, called the sum",Addition,12-0;12-1;12-2;12-3;12-4
+"Find the Wikipedia passage explaining this topic: Afghanistan. Afghanistan, officially the Islamic Emirate of Afghanistan (Pashto/Dari: ), is a country in Central Asia",Afghanistan,28-0;28-1;28-10;28-11;28-12;28-13;28-14;28-15;28-16;28-17;28-18;28-19;28-2;28-20;28-21;28-22;28-23;28-3;28-4;28-5;28-6;28-7;28-8;28-9
+Find the Wikipedia passage explaining this topic: Africa. Africa is the second largest continent in the world,Africa,464-0;464-1;464-2;464-3;464-4;464-5;464-6;464-7;464-8;464-9
+Find the Wikipedia passage explaining this topic: Air. Air is the Earth's atmosphere,Air,4-0;4-1;4-2;4-3
+"Find the Wikipedia passage explaining this topic: Alan Turing. Alan Mathison Turing OBE FRS (London, 23 June 1912 – Wilmslow, Cheshire, 7 June 1954) was an English mathematician and computer scientist",Alan Turing,6-0;6-1;6-2;6-3;6-4;6-5;6-6
+"Find the Wikipedia passage explaining this topic: Alanis Morissette. Alanis Nadine Morissette (born June 1, 1974) is a Grammy Award-winning Canadian-American singer and songwriter",Alanis Morissette,7-0;7-1;7-2;7-3;7-4;7-5
+"Find the Wikipedia passage explaining this topic: Algebra. Algebra (from Arabic: الجبر‎, transliterated ""al-jabr"", meaning ""reunion of broken parts"") is a part of mathematics",Algebra,22-0;22-1;22-10;22-11;22-12;22-13;22-14;22-2;22-3;22-4;22-5;22-6;22-7;22-8;22-9
+Find the Wikipedia passage explaining this topic: American English. American English or US English is the dialect of the English language spoken in the United States of America,American English,14-0;14-1;14-2;14-3;14-4;14-5
+Find the Wikipedia passage explaining this topic: Anatomy. Anatomy is the study of the bodies of people and other animals,Anatomy,26-0;26-1
+"Find the Wikipedia passage explaining this topic: Angel. In many mythologies and religions, an angel is a good spirit",Angel,17-0;17-1;17-10;17-2;17-3;17-4;17-5;17-6;17-7;17-8;17-9
+"Find the Wikipedia passage explaining this topic: Angola. Angola, officially the Republic of Angola, is a country in southern Africa",Angola,29-0;29-1;29-2
+Find the Wikipedia passage explaining this topic: Animal. Animals (or Metazoa) are living creatures with many cells,Animal,35-0;35-1;35-2;35-3
+Find the Wikipedia passage explaining this topic: Antarctica. Antarctica is the Earth's southernmost continent,Antarctica,473-0;473-1;473-10;473-11;473-12;473-2;473-3;473-4;473-5;473-6;473-7;473-8;473-9
+"Find the Wikipedia passage explaining this topic: Apple. An apple is the edible fruit of a number of trees, known for its juicy, green, or red fruits",Apple,20-0;20-1;20-10;20-11;20-2;20-3;20-4;20-5;20-6;20-7;20-8;20-9
